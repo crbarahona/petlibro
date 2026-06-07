@@ -586,6 +586,27 @@ class PetLibroAPI:
             _LOGGER.error(f"Error fetching wearListV2 for device {device_sn}: {e}")
             raise PetLibroAPIError(f"Error fetching wearListV2 for device {device_sn}: {e}")
 
+    async def pet_bathroom_history(
+        self,
+        device_sn: str,
+        pet_id: int,
+        start_time: int,
+        end_time: int,
+    ) -> dict:
+        """Get bathroom history summary for one pet on a Luma litter box."""
+        response = await self.session.request(
+            "POST",
+            "/data/petCare/bathroom/history",
+            json={
+                "deviceSn": device_sn,
+                "petId": pet_id,
+                "startTime": start_time,
+                "endTime": end_time,
+                "dimensionParam": 1,
+            },
+        )
+        return response if isinstance(response, dict) else {}
+
     # Support for new switch functions
     async def set_feeding_plan(self, serial: str, enable: bool):
         """Set the feeding plan on/off."""

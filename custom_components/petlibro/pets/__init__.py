@@ -1,7 +1,7 @@
 """Pet object representing pet(s) on the user's Petlibro account."""
 
 from __future__ import annotations
-from datetime import date
+from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from logging import getLogger
 import sys
@@ -68,6 +68,9 @@ class Pet(Event):
         fountain_drinking = {"todayFountainDrinkingCount": 0,
                              "todayFountainDrinkingAmount": 0,
                              "todayFountainDrinkingTime": 0}
+        bathroom_stats = {"todayBathroomVisits": 0,
+                          "todayBathroomPeeVisits": 0,
+                          "todayBathroomPooVisits": 0}
 
         # Collect RFID fountain serial numbers from bound devices and hub devices
         fountain_sns = set()
@@ -97,11 +100,40 @@ class Pet(Event):
             except Exception:
                 _LOGGER.warning("Failed to fetch wearListV2 for fountain %s", device_sn)
 
+        # Fetch per-pet bathroom visit summaries from loaded Luma litter boxes
+        luma_sns = set()
+        if self.hub and self.hub.devices:
+            from ..devices.litterboxes.luma_smart_litter_box import LumaSmartLitterBox
+            for device in self.hub.devices.values():
+                if isinstance(device, LumaSmartLitterBox):
+                    luma_sns.add(device.serial)
+
+        now = datetime.now().astimezone()
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_ms = int(start_of_day.timestamp() * 1000)
+        end_ms = int(now.timestamp() * 1000)
+
+        for device_sn in luma_sns:
+            try:
+                history = await self.api.pet_bathroom_history(
+                    device_sn, self.id, start_ms, end_ms
+                )
+                bathroom_stats["todayBathroomVisits"] += history.get("averageTimes") or 0
+                bathroom_stats["todayBathroomPeeVisits"] += history.get("peeTimes") or 0
+                bathroom_stats["todayBathroomPooVisits"] += history.get("poopTimes") or 0
+            except Exception:
+                _LOGGER.warning(
+                    "Failed bathroom history fetch for pet %s on %s",
+                    self.id,
+                    device_sn,
+                )
+
         self.update_data(
             {
                 **pet_details,
                 "boundDevices": bound_devices,
                 **fountain_drinking,
+                **bathroom_stats,
             }
         )
 
@@ -350,3 +382,20 @@ class Pet(Event):
     def today_fountain_drinking_time(self) -> int:
         """Total seconds spent drinking at RFID fountains today."""
         return self._data.get("todayFountainDrinkingTime") or 0
+
+    # --- Bathroom Visits (from Luma bathroom history)
+
+    @property
+    def today_bathroom_visits(self) -> int:
+        """Number of Luma litter-box visits today."""
+        return self._data.get("todayBathroomVisits") or 0
+
+    @property
+    def today_bathroom_pee_visits(self) -> int:
+        """Number of urination visits recorded by Luma litter boxes today."""
+        return self._data.get("todayBathroomPeeVisits") or 0
+
+    @property
+    def today_bathroom_poo_visits(self) -> int:
+        """Number of defecation visits recorded by Luma litter boxes today."""
+        return self._data.get("todayBathroomPooVisits") or 0
