@@ -13,6 +13,7 @@
 # https://api.us.petlibro.com/device/feedingPlan/list
 # https://api.us.petlibro.com/device/wetFeedingPlan/wetListV3
 
+import asyncio
 from logging import getLogger
 from hashlib import md5
 import sys
@@ -26,10 +27,6 @@ from aiohttp import ClientSession
 
 import aiohttp
 import uuid  # To generate unique request IDs
-
-async def make_api_call(session, url, data):
-    async with session.post(url, json=data) as response:
-        return await response.json()
 
 JSON: TypeAlias = dict[str, "JSON"] | list["JSON"] | str | int | float | bool | None
 _LOGGER = getLogger(__name__)
@@ -85,40 +82,62 @@ class PetLibroSession:
 
         if self.token is not None:
             kwargs["headers"]["token"] = self.token
-            _LOGGER.debug(f"Using token: {self.token}")
+            _LOGGER.debug("Using token from config entry")
         else:
             _LOGGER.warning("No token available for request. Attempting to log in...")
 
-        # Send the request
-        async with self.websession.request(method, joined_url, **kwargs) as resp:
-            _LOGGER.debug(f"Received response status: {resp.status}")
-            try:
-                data = await resp.json()
-            except Exception as e:
-                raise PetLibroAPIError(f"Error parsing response JSON: {e}")
+        # Send the request, retrying on 5xx server errors before parsing JSON.
+        # Each response stays in its own context so .json() is always called
+        # while the response is still alive and every response is released.
+        max_retries = 3  # initial request + 2 retries
+        retry_delay = 2
+        resp_status = None
+        data = None
+        for attempt in range(max_retries):
+            async with self.websession.request(method, joined_url, **kwargs) as resp:
+                _LOGGER.debug(f"Received response status: {resp.status}")
+                resp_status = resp.status
 
-            _LOGGER.debug(f"Response data: {data}")
+                if resp.status >= 500 and attempt < max_retries - 1:
+                    _LOGGER.warning(
+                        "Retrying %s %s (attempt %d/%d) after status %d",
+                        method, joined_url, attempt + 1, max_retries - 1, resp.status,
+                    )
+                    await asyncio.sleep(retry_delay)
+                    continue
 
-            if resp.status != 200:
-                raise PetLibroAPIError(f"Request failed with status: {resp.status}")
+                try:
+                    data = await resp.json()
+                except Exception as e:
+                    raise PetLibroAPIError(f"Error parsing response JSON: {e}")
 
-            if data.get("code") == 1009:  # NOT_YET_LOGIN error code
-                _LOGGER.debug(f"NOT_YET_LOGIN error occurred for {joined_url}. Trying re-login.")
-                # Trigger a re-login and get the new token
-                new_token = await self.re_login()
-                kwargs["headers"]["token"] = new_token
-                _LOGGER.debug(f"Retrying request with new token: {new_token}")
+                _LOGGER.debug(f"Response data: {data}")
 
-                # Retry the request with the new token
-                async with self.websession.request(method, joined_url, **kwargs) as retry_resp:
-                    retry_data = await retry_resp.json()
-                    _LOGGER.debug(f"Retry response: {retry_data}")
-                    return retry_data.get("data")
+                if resp.status != 200:
+                    raise PetLibroAPIError(f"Request failed with status: {resp.status}")
 
-            if data.get("code") != 0:
-                raise PetLibroAPIError(f"Code: {data.get('code')}, Message: {data.get('msg')}")
+                break
 
-            return data.get("data") or {}
+        if resp_status is not None and resp_status != 200:
+            raise PetLibroAPIError(f"Request failed with status: {resp_status}")
+
+        if data.get("code") == 1009:  # NOT_YET_LOGIN error code
+            _LOGGER.debug(f"NOT_YET_LOGIN error occurred for {joined_url}. Trying re-login.")
+            # Trigger a re-login and get the new token
+            new_token = await self.re_login()
+            kwargs["headers"]["token"] = new_token
+            _LOGGER.debug(f"Retrying request with new token: {new_token}")
+
+            # Retry the request with the new token
+            async with self.websession.request(method, joined_url, **kwargs) as retry_resp:
+                retry_data = await retry_resp.json()
+                _LOGGER.debug(f"Retry response: {retry_data}")
+                return retry_data.get("data")
+
+        if data.get("code") != 0:
+            raise PetLibroAPIError(f"Code: {data.get('code')}, Message: {data.get('msg')}")
+
+        return data.get("data") or {}
 
     async def re_login(self) -> str:
         """Re-login to get a new token when the old one expires."""
@@ -238,7 +257,7 @@ class PetLibroAPI:
                 raise PetLibroAPIError("No token found during login.")
 
             self.session.token = data["token"]
-            _LOGGER.debug(f"Login successful, token: {self.session.token}")
+            _LOGGER.debug("Login successful")
             return self.session.token
 
         except Exception as e:
@@ -531,6 +550,16 @@ class PetLibroAPI:
 
     async def device_events(self, serial: str) -> Dict[str, Any]:
         return await self.session.post_serial("/data/event/deviceEventsV2", serial)
+
+    async def tutk_info(self) -> Dict[str, Any]:
+        """Fetch the TUTK/Kalay session info (userToken + appTutkUrl) for the account.
+
+        The endpoint is account-scoped (member/third) and returns the same
+        credentials to primary and shared accounts; see issue #267. Uses an
+        empty payload.
+        """
+        _LOGGER.debug("Requesting TUTK session info")
+        return await self.session.post("/member/third/tutk/info", json={})
 
     async def device_upgrade(self, serial: str) -> Dict[str, Any]:
         return await self.session.post_serial("/device/ota/getUpgrade", serial)

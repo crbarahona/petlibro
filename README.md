@@ -67,6 +67,7 @@ If you enjoy this integration and want to support its development, please consid
 > [!NOTE]
   >* Tracking RFID per pet intance eat/drink - (PLWF305) - API Information gathered, working on implementation.
   >* Live camera feed for Granary Smart Camera Feeder (PLAF203) - Currently missing the API to setup live stream. Seems to connect via Kalay TUTK, if you have any experience integrating with this platform, please reach out to help us implement this.
+  >* The Granary Smart Camera Feeder exposes the TUTK/Kalay camera credentials (`camera_id`, `camera_auth_info`, `tutk_user_token`, `tutk_app_url`) as sensor attributes. These can be used with external TUTK clients (e.g. go2rtc) to stream the feed locally.
 
 # NOTICE
 #### Alpha/Beta state notice for this plugin:
@@ -133,7 +134,7 @@ logger:
 ---
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=jjjonesjr33/petlibro&type=Date&theme=dark)](https://www.star-history.com/#jjjonesjr33/petlibro&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=jjjonesjr33/petlibro&type=Date&theme=dark)](https://star-history.dera.page/#jjjonesjr33/petlibro&Date)
 
 [stars]: https://github.com/jjjonesjr33/petlibro/stargazers
 [starsbadge]: https://img.shields.io/github/stars/jjjonesjr33/petlibro?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDE2IDE2Ij48cGF0aCBzdHlsZT0iZmlsbDojY2NjY2NjIiBkPSJNOCAuMjVhLjc1Ljc1IDAgMCAxIC42NzMuNDE4bDEuODgyIDMuODE1IDQuMjEuNjEyYS43NS43NSAwIDAgMSAuNDE2IDEuMjc5bC0zLjA0NiAyLjk3LjcxOSA0LjE5MmEuNzUxLjc1MSAwIDAgMS0xLjA4OC43OTFMOCAxMi4zNDdsLTMuNzY2IDEuOThhLjc1Ljc1IDAgMCAxLTEuMDg4LS43OWwuNzItNC4xOTRMLjgxOCA2LjM3NGEuNzUuNzUgMCAwIDEgLjQxNi0xLjI4bDQuMjEtLjYxMUw3LjMyNy42NjhBLjc1Ljc1IDAgMCAxIDggLjI1Wm0wIDIuNDQ1TDYuNjE1IDUuNWEuNzUuNzUgMCAwIDEtLjU2NC40MWwtMy4wOTcuNDUgMi4yNCAyLjE4NGEuNzUuNzUgMCAwIDEgLjIxNi42NjRsLS41MjggMy4wODQgMi43NjktMS40NTZhLjc1Ljc1IDAgMCAxIC42OTggMGwyLjc3IDEuNDU2LS41My0zLjA4NGEuNzUuNzUgMCAwIDEgLjIxNi0uNjY0bDIuMjQtMi4xODMtMy4wOTYtLjQ1YS43NS43NSAwIDAgMS0uNTY0LS40MUw4IDIuNjk0WiI+PC9wYXRoPjwvc3ZnPg==&label=Stars&color=ffffff

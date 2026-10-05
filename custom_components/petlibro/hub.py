@@ -189,7 +189,7 @@ class PetLibroHub:
                 _LOGGER.error("Error fetching shared pet info.")
 
         if not pet_list:
-            _LOGGER.warning("No pets found in the API response.")
+            _LOGGER.debug("No pets found in the API response.")
             return  # Early return if no pets found
 
         for pet_data in pet_list:
@@ -235,6 +235,21 @@ class PetLibroHub:
     async def refresh_data(self) -> bool:
         """Refresh all known devices, member and pets info from the PETLIBRO API."""
 
+        # If the initial device load failed or returned no devices (e.g. a transient
+        # API/server error during setup), retry so the integration can recover
+        # without requiring a reinstall.
+        if not self.devices:
+            _LOGGER.debug("No devices loaded yet, attempting to load devices again.")
+            await self.load_devices()
+
+            if self.devices:
+                _LOGGER.debug(
+                    "Device reload successful, %d device(s) loaded.",
+                    len(self.devices),
+                )
+            else:
+                _LOGGER.debug("Device reload completed, but no devices were found.")
+
         if not self.devices and not self.member and not self.pets:
             _LOGGER.error("No devices, member, or pets to refresh.")
             return False
@@ -243,7 +258,7 @@ class PetLibroHub:
         if not self.member:
             _LOGGER.warning("No member to refresh.")
         if not self.pets:
-            _LOGGER.warning("No pets to refresh.")
+            _LOGGER.debug("No pets to refresh.")
 
         now = utcnow()
         refresh_tasks, data_objects = [], []
